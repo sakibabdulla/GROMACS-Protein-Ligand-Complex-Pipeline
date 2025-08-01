@@ -1,0 +1,64 @@
+---------------Post Processing MDS Protein-ligand-----------------------------------------
+
+gmx make_ndx -f EM.gro -o index.ndx
+
+select > Protein & Ligand
+       > q 
+       
+----[Recentering and Rewrapping Coordinates]----------------------------------------------
+gmx trjconv -s MD.tpr -f MD.xtc -o MD_center.xtc -center -pbc mol -ur compact
+#Choose "Protein" for centering and "System" for output.       
+       
+-----[to perform rotational and translational fitting]---- {optional}
+
+gmx trjconv -s MD.tpr -f MD_center.xtc -o MD_fit.xtc -fit rot+trans -n index.ndx
+
+#To extract the first frame (t = 0 ns) of the trajectory, use trjconv -dump with the recentered trajectory: 
+gmx trjconv -s MD.tpr -f MD_center.xtc -o start.pdb -dump 0 -n index.ndx      
+
+
+----------------------[Analyzing Protein-Ligand Interactions]----------------------------------
+------RMSD Calculations-----( Protein)--------------------
+gmx rms -s MD.tpr -f MD_center.xtc -o  Protein.xvg
+
+#for ns
+gmx rms -s MD.tpr -f MD_center.xtc -o Protein.xvg -tu ns
+
+select Backbone
+select Bcakbone 
+
+------RMSD Calculations-----( ligand)--------------------
+gmx rms -s MD.tpr -f MD_center.xtc -o  Ligand.xvg
+
+#for ns
+gmx rms -s MD.tpr -f MD_center.xtc -o Ligand.xvg -tu ns
+
+select LIG
+select LIG
+
+
+#(Select appropritate 2 options one by one and then open the output files in Grace)
+
+Visualize RMSD Plot
+xmgrace  Protein.xvg  
+xmgrace  Ligand.xvg  
+
+xmgrace  Protein.xvg Ligand.xvg
+
+----------------RMSF Calculations-----------------------
+gmx rmsf -s MD.tpr -f MD_center.xtc -o rmsf.xvg
+
+Select C-alpha 
+
+----------------------h-bonds--------------------------
+gmx hbond -s MD.tpr -f MD_center.xtc -num hb.xvg
+gmx hbond -s MD.tpr -f MD_center.xtc -num hb.xvg -tu ns
+1
+13
+xmgrace hb.xvg
+
+--------------Gyration Radius-------------------------
+gmx gyrate -s MD.tpr -f MD_center.xtc -o gyrate.xvg
+#Choose the group of your choice 
+xmgrace gyrate.xvg
+

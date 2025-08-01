@@ -1,0 +1,176 @@
+#########STEPS FOR MDS AS FOLLOWS######### 
+
+---PREPARE  RECEPTOR IN CHIMERA----
+
+1.We need to retrieve a xxx.pdb file  of the receptor before proceeding forward
+
+ Select -> Chain -> A
+ 
+Notice, however, that this does not remove Chains B, C, and D from our view. We need to perform this action manually.
+
+ Select -> Invert (Selected Molecules) -> Actions -> Atoms/Bonds -> Delete
+ 
+After deletion, the only thing remaining should be Chain A of the original file. It is within your best interest to save this session as you'll need to come back to this file when preparing the ligand. Doing so will prevent you from having to do the above deletion step again. 
+
+ File -> Save Session As ->
+
+Now that the session has been saved, we can go ahead and isolate the receptor. While we've isolated Chain A, you'll notice that ligand is still located on the molecule. In order to remove everything except reception , we need to do the following:
+
+ Select -> Residue -> LIG-> Actions -> Atoms/Bonds -> Delete
+ Select -> Residue -> HOH -> Actions -> Atoms/Bonds -> Delete
+ 
+With the receptor isolated, go ahead and save the file as
+fresh.pdb 
+
+Perform DockPrep of protein as save it as fresh.pdb file as 'REC.pdb'
+
+---PREPARE  LiGAND IN CHIMERA----
+Open the session in Chimera we previously saved that consisted of Chain A with both the receptor and  ligand. This time around, we'll be using the session file to isolate the ligand instead of the receptor.
+
+ Select -> Residue -> LIG -> Select -> Invert (Selected Molecules) -> Actions -> Atoms/Bonds -> Delete
+ Select -> Invert (Selected Molecules) -> Actions -> Atoms/Bonds -> Delete 
+ 
+2. Delete the chain of protein, in the residual ligand, add hydrogens and save it as LIG.mol2 as 'LIG.mol2'
+
+#Open the LIG.mol2 file and in the second line 
+#Correction to be made in LIG.mol2 
+#Open LIG.mol2 by using gedit command or simply opening file in any text editor.
+2.1.	"@<TRIPOS>MOLECULE" make sure this is the first line in file
+	delete the header and empty space if you have to
+	
+2.2.      "@<TRIPOS>MOLECULE” there will be name after this line maybe xxx.pdb or ****** or anything else
+	change it to LIG 
+	
+2.3.	bond orders "@<TRIPOS>BOND" will be arranged differently in each file 
+arrange them in specific order to avoid errors use 
+perl sort_mol2_bonds.pl LIG.mol2 LIG.mol2 script
+
+3. Go to SwissParam "http://www.swissparam.ch/" and upload the 'Lig.mol2 file'
+4. Download the .zip folder
+5. Make a working Folder for Gromacs, copy contents of the downloaded zip file into this folder, copy the DockPrep 'REC.pdb' in to working folder
+7. Copy all the .mdp files into this working folder
+8. Open the terminal in this working folder and proceed with Gromacs.  
+
+---------GROMACS UBUNTU ---
+
+gmx pdb2gmx -f REC.pdb -ignh
+8 (CHARMM27)
+1 (TIP3P)
+gmx editconf -f LIG.pdb -o LIG.gro
+gedit conf.gro LIG.gro
+*(Copy content from 3rd line of lig.gro to the conf.gro file up to the 2nd last line)
+*(Check the column number from where the lig.gro data ends (x) in conf.gro and replace the value in 2nd line by x-3)
+*(Open file in chimera to check ligand and receptor)
+
+-----EDIT THE FOLLOWING in topol.top -----
+gedit topol.top
+(add 
+
+; Include ligand topology 
+#include "LIG.itp"
+
+below- Include forcefield parameters
+#include "amberGS.ff/forcefield.itp")
+
+AT THE BOTTOM OF THE SAME FILE PERFORM FOLLOWING CHANGES
+(add LIG 1
+align exactly below-
+Protein_chain_E     1)
+
+-----EDIT THE FOLLOWING in LIG.itp -----
+
+gedit lig.itp
+[ moleculetype ]
+; Name nrexcl
+lig_gmx2 3
+TO
+[ moleculetype ]
+; Name nrexcl
+LIG 3
+(in certain cases this will already be LIG 3 so for such case no change is needed)
+
+----------
+
+gmx editconf -f conf.gro -d 1.0 -bt triclinic -o box.gro
+
+gmx solvate -cp box.gro -cs spc216.gro -p topol.top -o box_sol.gro
+
+gmx grompp -f ions.mdp -c box_sol.gro -p topol.top -o ION.tpr      
+(OR)
+gmx grompp -f ions.mdp -c box_sol.gro -maxwarn 2 -p topol.top -o ION.tpr
+
+
+gmx genion -s ION.tpr -p topol.top -conc 0.1 -neutral -o box_sol_ion.gro
+15
+
+gmx grompp -f EM.mdp -c box_sol_ion.gro -p topol.top -o EM.tpr     (OR)
+gmx grompp -f EM.mdp -c box_sol_ion.gro -maxwarn 2 -p topol.top -o EM.tpr
+
+gmx mdrun -v -deffnm EM
+
+gedit NVT.mdp 
+
+Now make index files
+ 
+gmx make_ndx -f LIG.gro -o index_LIG.ndx
+	 > 0 & ! a H*
+ 	 > q
+
+gmx genrestr -f LIG.gro -n index_LIG.ndx -o posre_LIG.itp -fc 1000 1000 1000
+	> select group "3"
+	
+Now, open topol.top file
+
+	at the end of the document 
+
+	after 
+		"; Include Position restraint file
+		#ifdef POSRES
+		#include "posre.itp"
+		#endif
+
+		"Here"
+
+	add this 
+
+		; Ligand position restraints
+		#ifdef POSRES
+		#include "posre_LIG.itp"
+		#endif
+
+Again, Make other Index file for System 
+
+gmx make_ndx -f EM.gro -o index.ndx
+	
+	> 1 | 13
+	> q
+	
+	
+-----[NVT]-----
+gedit NVT.mdp 
+
+gmx grompp -f NVT.mdp -c EM.gro -r EM.gro -p topol.top -n index.ndx -maxwarn 2 -o NVT.tpr
+	
+gmx mdrun -deffnm NVT
+
+
+-----[NPT]-----
+gedit NPT.mdp 
+
+gmx grompp -f NPT.mdp -c NVT.gro -r NVT.gro -p topol.top -n index.ndx -maxwarn 2 -o NPT.tpr
+	
+gmx mdrun -deffnm NPT
+
+-----[FINAL MD RUN/PRODUCTION]-----
+gedit MD.mdp (Change MD RUN TIME as per your need)
+
+gmx grompp -f MD.mdp -c NPT.gro -t NPT.cpt -p topol.top -n index.ndx -maxwarn 2 -o MD.tpr
+
+gmx mdrun -deffnm MD
+
+
+
+
+
+
+
